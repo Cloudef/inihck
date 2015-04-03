@@ -329,7 +329,7 @@ parse_key(struct ini *ini, struct state *state)
       is_empty_key = true;
    }
 
-   end = (end ? end : state->cursor - 1);
+   end = (end ? end : state->cursor);
 
    if (!is_empty_key && state->line != before.line) {
       --state->cursor;
