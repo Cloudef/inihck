@@ -12,7 +12,7 @@ add_executable(fuzz_test test.c)
 target_link_libraries(fuzz_test inihck)
 set_target_properties(fuzz_test PROPERTIES COMPILE_DEFINITIONS FUZZ=1)
 add_custom_target(fuzz DEPENDS fuzz_test
-   COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/fuzz.sh"
+   COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/fuzz.bash"
    )
 
 FILE(COPY test.ini DESTINATION .)
