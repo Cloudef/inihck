@@ -352,6 +352,8 @@ parse_key(struct ini *ini, struct state *state)
       if (!state->options.empty_keys) {
          throw(ini, &before, "Key does not end up with '='");
          return false;
+      } else if (!has_whitespace) {
+         has_whitespace = is_eol_or_space(*last);
       }
 
       is_empty_key = true;
