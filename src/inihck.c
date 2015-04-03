@@ -264,7 +264,7 @@ parse_value(struct ini *ini, struct state *state)
          continue;
 
       if (!started && *state->cursor == '"') {
-         is_quoted = true;
+         started = is_quoted = true;
          continue;
       }
 
