@@ -21,7 +21,8 @@ struct state {
    struct chck_string section; // current section
    const char *cursor; // current char
    const char *line_start; // where line started
-   size_t line;
+   const char *buffer;
+   size_t line, size;
    uint16_t utf16_hi;
 };
 
@@ -34,10 +35,15 @@ throw_message(struct ini *ini, const struct state *state, const char *message)
       return;
 
    char line[128];
-   const size_t nl = strcspn(state->line_start, "\n\r\v\f");
+   const size_t avail = state->size - (state->line_start - state->buffer);
+   const size_t len = (avail >= sizeof(line) ? sizeof(line) : avail);
+   strncpy(line, state->line_start, len);
+   line[len] = 0;
+
+   const size_t nl = strcspn(line, "\n\r\v\f");
    const size_t end = (nl < sizeof(line) ? nl : sizeof(line));
-   strncpy(line, state->line_start, end);
    line[end] = 0;
+
    ini->throw(ini, state->line, (size_t)(state->cursor - state->line_start + 1), line, message);
 }
 
@@ -66,23 +72,29 @@ is_eol_or_space(char chr)
    return (is_eol(chr) || isspace(chr));
 }
 
+static bool
+state_end(const struct state *state)
+{
+   return ((size_t)(state->cursor - state->buffer) >= state->size);
+}
+
 static char
 advance(struct state *state, bool skip_whitespace)
 {
    assert(state);
 
-   if (!*state->cursor)
-      return *state->cursor;
+   if (state_end(state))
+      return 0;
 
    do {
-      if (is_eol(*(++state->cursor))) {
+      if (++state->cursor && !state_end(state) && is_eol(*state->cursor)) {
          state->cursor += (*(state->cursor - 1) == '\r' && *state->cursor == '\n');
          ++state->line;
          state->line_start = state->cursor + 1;
       }
-   } while (is_eol(*state->cursor) || (skip_whitespace && isspace(*state->cursor)));
+   } while (!state_end(state) && (is_eol(*state->cursor) || (skip_whitespace && isspace(*state->cursor)) || !*state->cursor));
 
-   return *state->cursor;
+   return (state_end(state) ? 0 : *state->cursor);
 }
 
 static bool
@@ -277,9 +289,9 @@ parse_value(struct ini *ini, struct state *state)
    }
 
    if (is_quoted) {
-      assert(*state->cursor == '"' || !*(state->cursor));
+      assert(state_end(state) || *state->cursor == '"');
 
-      if (*state->cursor != '"') {
+      if (state_end(state) || *state->cursor != '"') {
          throw(ini, &before, "Unterminated quoted string");
          goto error0;
       }
@@ -287,7 +299,7 @@ parse_value(struct ini *ini, struct state *state)
       // skip ending "
       ++state->cursor;
    } else {
-      assert(is_eol_or_space(*(state->cursor - 1)) || !*state->cursor);
+      assert(state_end(state) || state->line != line);
    }
 
    if (!started) {
@@ -329,6 +341,9 @@ parse_key(struct ini *ini, struct state *state)
          last = (end ? end : state->cursor);
       }
    }
+
+   if (state_end(state))
+      return false;
 
    // valueless key in other words
    bool is_empty_key = false;
@@ -387,6 +402,9 @@ parse_section(struct ini *ini, struct state *state)
          has_whitespace = true;
    }
 
+   if (state_end(state))
+      return false;
+
    if (*state->cursor != ']') {
       throw(ini, &before, "Section does not end up with ']'");
       return false;
@@ -428,13 +446,16 @@ parse_comment(struct ini *ini, struct state *state)
    assert(*state->cursor == '#' || *state->cursor == ';');
    size_t line = state->line;
    while (advance(state, true) && state->line == line) escape_eol(state, &line);
-   assert(is_eol_or_space(*(state->cursor - 1)) || !*state->cursor);
+   assert(state_end(state) || state->line != line);
    return true;
 }
 
 static char
 next(struct state *state, bool parsed)
 {
+   if (state_end(state))
+      return 0;
+
    return (parsed && !is_eol_or_space(*state->cursor) ? *state->cursor : advance(state, true));
 }
 
@@ -533,12 +554,26 @@ ini_flush(struct ini *ini)
 }
 
 bool
+ini_parse_from_memory(struct ini *ini, const char *buffer, size_t size, const struct ini_options *options)
+{
+   assert(ini && buffer);
+
+   struct state state;
+   memset(&state, 0, sizeof(state));
+   state.line = 1;
+   state.size = size;
+   state.line_start = state.cursor = state.buffer = buffer;
+
+   if (options)
+      memcpy(&state.options, options, sizeof(state.options));
+
+   return parse(ini, &state);
+}
+
+bool
 ini_parse(struct ini *ini, const char *path, const struct ini_options *options)
 {
    assert(ini && path);
-
-   // XXX: we could use mmap here
-   //      note, we do not support streaming and assume everything fits to memory
 
    FILE *f;
    if (!(f = fopen(path, "rb")))
@@ -548,28 +583,16 @@ ini_parse(struct ini *ini, const char *path, const struct ini_options *options)
    const size_t size = ftell(f);
    fseek(f, 0, SEEK_SET);
 
-   if (size >= SIZE_MAX)
-      goto error0;
-
    char *buffer;
-   if (!(buffer = malloc(size + 1)))
+   if (!size || !(buffer = malloc(size)))
       goto error0;
 
    if (fread(buffer, 1, size, f) != size)
       goto error1;
 
-   buffer[size] = 0;
    fclose(f);
 
-   struct state state;
-   memset(&state, 0, sizeof(state));
-   state.line = 1;
-   state.line_start = state.cursor = buffer;
-
-   if (options)
-      memcpy(&state.options, options, sizeof(state.options));
-
-   const bool ret = parse(ini, &state);
+   const bool ret = ini_parse_from_memory(ini, buffer, size, options);
    free(buffer);
    return ret;
 

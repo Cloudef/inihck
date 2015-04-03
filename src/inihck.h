@@ -48,6 +48,7 @@ struct ini_iterator {
 INI_NONULLV(1) bool ini(struct ini *ini, char delim, size_t size, ini_throw_cb cb);
 void ini_release(struct ini *ini);
 INI_NONULL void ini_flush(struct ini *ini);
+INI_NONULLV(1,2) bool ini_parse_from_memory(struct ini *ini, const char *buffer, size_t size, const struct ini_options *options);
 INI_NONULLV(1,2) bool ini_parse(struct ini *ini, const char *path, const struct ini_options *options);
 INI_NONULLV(1,2) bool ini_get(struct ini *ini, const char *path, struct ini_value *out_value);
 INI_NONULL bool ini_iter(struct ini *ini, struct ini_iterator *iterator, struct ini_value *out_value);
