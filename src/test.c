@@ -18,7 +18,7 @@ throw(struct ini *ini, size_t line_num, size_t position, const char *line, const
 {
    (void)ini;
    printf("[%zu, %zu]: %s\n", line_num, position, message);
-   printf("%s\n%*s%c\n", line, (uint32_t)(position - 1), " ", '^');
+   printf("%s\n%*c\n", line, (uint32_t)position, '^');
 }
 
 int main(void)
