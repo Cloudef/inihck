@@ -1,6 +1,7 @@
 #include <chck/lut/lut.h>
 #include <chck/pool/pool.h>
 #include <chck/string/string.h>
+#include <chck/unicode/unicode.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -99,8 +100,6 @@ decode_hex(struct state *state, uint8_t len)
    return strtoul(hex, NULL, 16);
 }
 
-// XXX: move unicode functions to chck?
-
 static bool
 decode_u8(struct ini *ini, struct state *state, uint32_t dec, struct chck_iter_pool *pool)
 {
@@ -111,14 +110,12 @@ decode_u8(struct ini *ini, struct state *state, uint32_t dec, struct chck_iter_p
       return false;
    }
 
-   const uint8_t mb = (dec < 0x80 ? 0 : (dec < 0x800 ? 1 : (dec < 0x10000 ? 2 : 3)));
+   char u8[4];
+   const uint8_t len = chck_utf32_encode(dec, u8);
+   assert(len <= sizeof(u8));
 
-   const uint8_t bits[4] = { 0x00, 0xC0, 0xE0, 0xF0 };
-   if (!chck_iter_pool_push_back(pool, (char[]){ ((dec >> (mb * 6)) | bits[mb]) }))
-         return false;
-
-   for (int32_t i = mb * 6 - 6; i >= 0; i -= 6)
-      if (!chck_iter_pool_push_back(pool, (char[]){ (((dec >> i) & 0x3F) | 0x80) }))
+   for (uint8_t i = 0; i < len; ++i)
+      if (!chck_iter_pool_push_back(pool, u8 + i))
          return false;
 
    return true;
@@ -134,33 +131,29 @@ decode_u4(struct ini *ini, struct state *state, uint32_t dec, struct chck_iter_p
       return false;
    }
 
-#define IS_HIGH_SURROGATE(dec) (((dec) & 0xFC00) == 0xD800)
-#define IS_LOW_SURROGATE(dec) (((dec) & 0xFC00) == 0xDC00)
-#define DECODE_SURROGATE_PAIR(hi, lo) ((((hi) & 0x3FF) << 10) + ((lo) & 0x3FF) + 0x10000)
+   char u8[4] = {0};
+   enum chck_utf16_error error;
+   const uint8_t len = chck_utf16_encode(dec, u8, &state->utf16_hi, &error);
+   assert(len <= sizeof(u8));
 
-   if (state->utf16_hi) {
-      if (IS_LOW_SURROGATE(dec)) {
-         dec = DECODE_SURROGATE_PAIR(state->utf16_hi, dec);
-         state->utf16_hi = 0;
-      } else {
+   switch (error) {
+      case CHCK_UTF16_OK:
+         break;
+
+      case CHCK_UTF16_UNEXPECTED_LOW:
          throw(ini, state, "Expected low UTF16 surrogate after high surrogate");
          return false;
-      }
-   } else {
-      if (IS_HIGH_SURROGATE(dec)) {
-         state->utf16_hi = dec;
-         return true;
-      } else if (IS_LOW_SURROGATE(dec)) {
+
+      case CHCK_UTF16_UNEXPECTED_HIGH:
          throw(ini, state, "Expected high UTF16 surrogate before low surrogate");
          return false;
-      }
    }
 
-#undef DECODE_SURROGATE_PAIR
-#undef IS_LOW_SURROGATE
-#undef IS_HIGH_SURROGATE
+   for (uint8_t i = 0; i < len; ++i)
+      if (!chck_iter_pool_push_back(pool, u8 + i))
+         return false;
 
-   return decode_u8(ini, state, dec, pool);
+   return true;
 }
 
 static bool
