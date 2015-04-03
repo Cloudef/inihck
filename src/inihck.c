@@ -439,6 +439,12 @@ parse_comment(struct ini *ini, struct state *state)
    return true;
 }
 
+static char
+next(struct state *state, bool parsed)
+{
+   return (parsed && !is_eol_or_space(*state->cursor) ? *state->cursor : advance(state, true));
+}
+
 static bool
 parse(struct ini *ini, struct state *state)
 {
@@ -454,10 +460,10 @@ parse(struct ini *ini, struct state *state)
       { 0, parse_key },
    };
 
-   bool valid = true;
-   char chr = *state->cursor;
-   while (chr) {
-      bool parsed = false;
+   char chr;
+   bool valid = true, parsed = true;
+   while ((chr = next(state, parsed))) {
+      parsed = false;
 
       for (uint32_t i = 0;; ++i) {
          if (map[i].chr && map[i].chr != chr)
@@ -469,8 +475,6 @@ parse(struct ini *ini, struct state *state)
          parsed = true;
          break;
       }
-
-      chr = (parsed && !is_eol_or_space(*state->cursor) ? *state->cursor : advance(state, true));
    }
 
    return valid;
