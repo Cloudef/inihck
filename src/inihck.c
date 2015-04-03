@@ -369,7 +369,7 @@ parse_key(struct ini *ini, struct state *state)
       return false;
    }
 
-   if (last > start)
+   if (last >= start)
       chck_string_set_cstr_with_length(&state->key, start, last + 1 - start, false);
 
    if (chck_string_is_empty(&state->key)) {
