@@ -59,6 +59,12 @@ is_eol(char chr)
    return (chr == '\n' || chr == '\r' || chr == '\v' || chr == '\f');
 }
 
+static bool
+is_eol_or_space(char chr)
+{
+   return (is_eol(chr) || isspace(chr));
+}
+
 static char
 advance(struct state *state, bool skip_whitespace)
 {
@@ -199,26 +205,30 @@ escape_eol(struct state *state, size_t *line)
 }
 
 static bool
-set_value(struct ini *ini, struct state *state, struct chck_iter_pool *pool)
+set_value(struct ini *ini, const struct state *before, struct state *state, struct chck_iter_pool *pool)
 {
    assert(ini && state);
 
    struct chck_string path = {0};
    const char *section = (chck_string_is_empty(&state->section) ? "" : state->section.data);
    if (!chck_string_set_format(&path, "%.*s%c%.*s", (int)state->section.size, section, ini->delim, (int)state->key.size, state->key.data)) {
-      throw(ini, state, "Could not set key '%s.%s' (out of memory?)", section, state->key.data);
+      throw(ini, before, "Could not set key '%s.%s' (out of memory?)", section, state->key.data);
       return false;
    }
 
    if (chck_hash_table_str_get(&ini->data->table, path.data, path.size)) {
-      throw(ini, state, "Key '%s' is already set", path.data);
+      throw(ini, before, "Key '%s' is already set", path.data);
       goto error0;
    }
 
-   // steal ownership from pool
    struct chck_string value = {0};
 
    if (pool) {
+      // make sure value is null terminated
+      if (pool->items.count > 0 && *(char*)chck_iter_pool_get_last(pool) != 0)
+         chck_iter_pool_push_back(pool, "");
+
+      // steal ownership from pool
       chck_string_set_cstr_with_length(&value, pool->items.buffer, pool->items.count, false);
       value.is_heap = true;
       pool->items.buffer = NULL;
@@ -241,6 +251,7 @@ static bool
 parse_value(struct ini *ini, struct state *state)
 {
    assert(ini && state);
+   assert(*state->cursor == '=');
 
    struct chck_iter_pool pool;
    chck_iter_pool(&pool, 32, 0, sizeof(char));
@@ -264,7 +275,7 @@ parse_value(struct ini *ini, struct state *state)
          continue;
 
       if (!started && *state->cursor == '"') {
-         started = is_quoted = true;
+         is_quoted = true;
          continue;
       }
 
@@ -272,28 +283,37 @@ parse_value(struct ini *ini, struct state *state)
       started = true;
    }
 
-   if (!started) {
-      --state->cursor;
+   if (is_quoted) {
+      assert(*state->cursor == '"' || !*(state->cursor));
 
+      if (*state->cursor != '"') {
+         throw(ini, &before, "Unterminated quoted string");
+         goto error0;
+      }
+
+      // skip ending "
+      ++state->cursor;
+   } else {
+      assert(is_eol_or_space(*(state->cursor - 1)) || !*state->cursor);
+   }
+
+   if (!started) {
       if (!state->options.empty_values) {
          throw(ini, &before, "Value should not be empty");
-         return false;
+         goto error0;
       }
 
       goto out;
    }
 
-   if (is_quoted) {
-      assert(*state->cursor == '"' || !*(state->cursor));
-   } else {
-      --state->cursor;
-      assert(isspace(*state->cursor) || is_eol(*state->cursor) || !*(state->cursor + 1));
-   }
-
 out: ; // stupid C standard
-   const bool ret = set_value(ini, state, &pool);
+   const bool ret = set_value(ini, &before, state, &pool);
    chck_iter_pool_release(&pool);
    return ret;
+
+error0:
+   chck_iter_pool_release(&pool);
+   return false;
 }
 
 static bool
@@ -305,13 +325,15 @@ parse_key(struct ini *ini, struct state *state)
    struct state before = *state;
    bool invalid_characters = false;
    bool has_whitespace = false;
-   const char *start = state->cursor, *end = NULL;
+   const char *start = state->cursor, *last = state->cursor, *end = NULL;
    while (advance(state, has_whitespace) && *state->cursor != '=' && state->line == before.line) {
       if (*state->cursor == ini->delim) {
          invalid_characters = true;
       } else if (isspace(*state->cursor)) {
          has_whitespace = (end ? true : false);
          end = state->cursor;
+      } else {
+         last = (end ? end : state->cursor);
       }
    }
 
@@ -319,8 +341,6 @@ parse_key(struct ini *ini, struct state *state)
    bool is_empty_key = false;
 
    if (*state->cursor != '=') {
-      --state->cursor;
-
       if (!state->options.empty_keys) {
          throw(ini, &before, "Key does not end up with '='");
          return false;
@@ -329,16 +349,12 @@ parse_key(struct ini *ini, struct state *state)
       is_empty_key = true;
    }
 
-   end = (end ? end : state->cursor);
-
    if (!is_empty_key && state->line != before.line) {
-      --state->cursor;
       throw(ini, &before, "Key contains newline");
       return false;
    }
 
    if (has_whitespace) {
-      --state->cursor;
       throw(ini, &before, "Key contains whitespace");
       return false;
    }
@@ -348,19 +364,20 @@ parse_key(struct ini *ini, struct state *state)
       return false;
    }
 
-   if (end - start > INT_MAX) {
+   if (last - start > INT_MAX) {
       throw(ini, state, "Key name too long");
       return false;
    }
 
-   chck_string_set_cstr_with_length(&state->key, start, end - start, false);
+   if (last > start)
+      chck_string_set_cstr_with_length(&state->key, start, last + 1 - start, false);
 
    if (chck_string_is_empty(&state->key)) {
       throw(ini, state, "Key is empty");
       return false;
    }
 
-   return (is_empty_key ? set_value(ini, state, NULL) : parse_value(ini, state));
+   return (is_empty_key ? set_value(ini, &before, state, NULL) : parse_value(ini, state));
 }
 
 static bool
@@ -378,19 +395,19 @@ parse_section(struct ini *ini, struct state *state)
    }
 
    if (*state->cursor != ']') {
-      --state->cursor;
       throw(ini, &before, "Section does not end up with ']'");
       return false;
    }
 
+   // skip ending ] so we do not try to parse it
+   ++state->cursor;
+
    if (state->line != before.line) {
-      --state->cursor;
       throw(ini, &before, "Section contains newline");
       return false;
    }
 
    if (has_whitespace) {
-      --state->cursor;
       throw(ini, state, "Section contains whitespace");
       return false;
    }
@@ -400,7 +417,8 @@ parse_section(struct ini *ini, struct state *state)
       return false;
    }
 
-   chck_string_set_cstr_with_length(&state->section, start, state->cursor - start, false);
+   if (state->cursor > start)
+      chck_string_set_cstr_with_length(&state->section, start, state->cursor - 1 - start, false);
 
    if (chck_string_is_empty(&state->section)) {
       throw(ini, state, "Section is empty");
@@ -417,8 +435,7 @@ parse_comment(struct ini *ini, struct state *state)
    assert(*state->cursor == '#' || *state->cursor == ';');
    size_t line = state->line;
    while (advance(state, true) && state->line == line) escape_eol(state, &line);
-   --state->cursor;
-   assert(isspace(*state->cursor) || is_eol(*state->cursor) || !*(state->cursor + 1));
+   assert(is_eol_or_space(*(state->cursor - 1)) || !*state->cursor);
    return true;
 }
 
@@ -437,9 +454,11 @@ parse(struct ini *ini, struct state *state)
       { 0, parse_key },
    };
 
-   char chr = *state->cursor;
    bool valid = true;
-   do {
+   char chr = *state->cursor;
+   while (chr) {
+      bool parsed = false;
+
       for (uint32_t i = 0;; ++i) {
          if (map[i].chr && map[i].chr != chr)
             continue;
@@ -447,9 +466,12 @@ parse(struct ini *ini, struct state *state)
          if (!map[i].parse(ini, state))
             valid = false;
 
+         parsed = true;
          break;
       }
-   } while ((chr = advance(state, true)));
+
+      chr = (parsed && !is_eol_or_space(*state->cursor) ? *state->cursor : advance(state, true));
+   }
 
    return valid;
 }

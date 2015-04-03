@@ -61,6 +61,12 @@ int main(void)
    struct ini_value value;
    assert(ini_get(&inif, "foo.bar", &value));
    assert(!strncmp(value.data, "foo UTF16: 🏩 UTF32: 🏩newline\nyeah\r\n\t\b\\0 ← null terminator", value.size));
+   assert(ini_get(&inif, "foo.empty", &value));
+   assert(!strncmp(value.data, "", value.size));
+   assert(ini_get(&inif, "foo.empty2", &value));
+   assert(!strncmp(value.data, "", value.size));
+   assert(ini_get(&inif, "foo.bar2", &value));
+   assert(!strncmp(value.data, "asd", value.size));
    assert(ini_get(&inif, ".foo", &value));
    assert(!strncmp(value.data, "bar", value.size));
    assert(ini_get(&inif, "valid[.valid", &value));
