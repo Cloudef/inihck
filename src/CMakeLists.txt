@@ -1,8 +1,21 @@
-include_directories(${inihck_SOURCE_DIR}/lib/chck/src)
-add_library(inihck inihck.c)
+# Parse soversion version
+string(REGEX MATCHALL "[0-9]+" VERSION_COMPONENTS ${INIHCK_VERSION})
+list(GET VERSION_COMPONENTS 0 SOVERSION)
+
+include_directories(${inihck_SOURCE_DIR}/include ${inihck_SOURCE_DIR}/lib/chck/src)
+
+if (INIHCK_BUILD_STATIC)
+   add_library(inihck inihck.c)
+else ()
+   add_definitions(-DINIHCK_BUILD_SHARED)
+   add_library(inihck SHARED inihck.c)
+endif ()
+
+set_target_properties(inihck PROPERTIES VERSION ${INIHCK_VERSION} SOVERSION ${SOVERSION})
 target_link_libraries(inihck chck_inihck)
+
 install(TARGETS inihck DESTINATION lib)
-install(FILES inihck.h DESTINATION include/inihck)
+install(DIRECTORY "${inihck_SOURCE_DIR}/include/inihck" DESTINATION include)
 
 add_executable(ini_test test.c)
 target_link_libraries(ini_test inihck)
@@ -16,3 +29,6 @@ add_custom_target(fuzz DEPENDS fuzz_test
    )
 
 FILE(COPY test.ini DESTINATION .)
+
+set(INIHCK_LIBRARY inihck CACHE STRING "inihck library" FORCE)
+set(INIHCK_INCLUDE_DIRS "${inihck_SOURCE_DIR}/include" CACHE STRING "Include directories of inihck" FORCE)

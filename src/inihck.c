@@ -1,3 +1,4 @@
+#include <inihck/inihck.h>
 #include <chck/lut/lut.h>
 #include <chck/pool/pool.h>
 #include <chck/string/string.h>
@@ -8,7 +9,6 @@
 #include <ctype.h>
 #include <limits.h>
 #include <assert.h>
-#include "inihck.h"
 
 struct ini_data {
    struct chck_hash_table table;

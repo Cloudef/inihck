@@ -2,9 +2,13 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 PROJECT(inihck)
 set(INIHCK_NAME "inihck")
 set(INIHCK_DESCRIPTION "Small ini parser")
+set(INIHCK_VERSION "0.0.1")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${inihck_SOURCE_DIR}/CMake)
 INCLUDE(CTest)
 INCLUDE(test)
+
+# Options
+OPTION(INIHCK_BUILD_STATIC "Build inihck as static library" OFF)
 
 set(CTEST_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/test)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CTEST_OUTPUT_DIRECTORY})
@@ -31,5 +35,3 @@ include_directories(
 
 add_subdirectory(lib)
 add_subdirectory(src)
-
-file(COPY src/inihck.h DESTINATION include/inihck)

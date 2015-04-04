@@ -1,8 +1,8 @@
+#include <inihck/inihck.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include "inihck.h"
 
 #undef NDEBUG
 #include <assert.h>
