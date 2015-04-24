@@ -32,5 +32,5 @@ if (INIHCK_BUILD_TESTS)
    file(COPY test.ini DESTINATION .)
 endif ()
 
-set(INIHCK_LIBRARY inihck CACHE STRING "inihck library" FORCE)
+set(INIHCK_LIBRARIES inihck CACHE STRING "Libraries of inihck" FORCE)
 set(INIHCK_INCLUDE_DIRS "${inihck_SOURCE_DIR}/include" CACHE STRING "Include directories of inihck" FORCE)
