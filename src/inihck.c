@@ -234,7 +234,7 @@ set_value(struct ini *ini, const struct state *before, struct state *state, stru
          chck_iter_pool_push_back(pool, "");
 
       // steal ownership from pool
-      chck_string_set_cstr_with_length(&value, pool->items.buffer, pool->items.count, false);
+      chck_string_set_cstr_with_length(&value, (void*)pool->items.buffer, pool->items.count, false);
       value.is_heap = true;
       pool->items.buffer = NULL;
    }
@@ -444,6 +444,7 @@ parse_section(struct ini *ini, struct state *state)
 static bool
 parse_comment(struct ini *ini, struct state *state)
 {
+   (void)ini;
    assert(ini && state);
    assert(*state->cursor == '#' || *state->cursor == ';');
    size_t line = state->line;
