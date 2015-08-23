@@ -1,16 +1,35 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
-PROJECT(inihck)
-set(INIHCK_NAME "inihck")
-set(INIHCK_DESCRIPTION "Small ini parser")
-set(INIHCK_VERSION "0.0.1")
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${inihck_SOURCE_DIR}/CMake)
-INCLUDE(GNUInstallDirs)
-INCLUDE(CTest)
-INCLUDE(test)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
+PROJECT(inihck VERSION 0.0.1 LANGUAGES C)
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/CMake")
+
+# Subprojects
+include(subproject)
+add_subdirectory(lib)
+
+# CPack
+set(CPACK_SYSTEM_NAME "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set(CPACK_GENERATOR "7Z")
+set(CPACK_PACKAGE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/pkg")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Small ini parser")
+set(CPACK_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION ON)
+
+# Includes
+include(GNUInstallDirs)
+include(FeatureSummary)
+include(CPack)
+include(CTest)
+include(test)
 
 # Options
 OPTION(INIHCK_BUILD_STATIC "Build inihck as static library" OFF)
 OPTION(INIHCK_BUILD_TESTS "Build inihck tests" ON)
+
+add_feature_info(Static INIHCK_BUILD_STATIC "Compile as static library")
+add_feature_info(Tests INIHCK_BUILD_TESTS "Compile tests")
+
+if (NOT INIHCK_BUILD_STATIC)
+   set(BUILD_SHARED_LIBS ON)
+endif ()
 
 set(CTEST_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/test)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CTEST_OUTPUT_DIRECTORY})
@@ -18,28 +37,30 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
 
 if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
-   set(ldflags -Wl,-O1,--sort-common,--as-needed,-z,relro,-z,now)
+   set(ldflags -Wl,-O1,--no-undefined,--sort-common,--as-needed,-z,relro,-z,now)
    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ldflags}")
    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${ldflags}")
    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${ldflags}")
+
+   if ("${CMAKE_C_FLAGS}" STREQUAL "")
+      add_definitions(-O2)
+      add_definitions(-fstack-protector-strong -fstack-check -flto)
+   endif ()
+
    add_definitions(
       -Wall -Wextra -Wno-variadic-macros -Wno-long-long -Wformat=2 -Winit-self -Wfloat-equal
       -Wcast-align -Wpointer-arith -Wmissing-prototypes -Wsuggest-attribute=pure -Wsuggest-attribute=const)
-   add_definitions(-fstack-protector-strong -fstack-check -pie -flto)
 endif ()
 
-if (UNIX AND CMAKE_COMPILER_IS_GNUCC)
-   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-   if (${CMAKE_VERSION} VERSION_LESS 2.8.9)
-      add_definitions(-fPIC)
-   endif ()
-endif ()
+# -std=c99 -fpic -fpie -D_DEFAULT_SOURCE
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+add_definitions(-D_DEFAULT_SOURCE)
 
-add_definitions(-std=c99 -D_DEFAULT_SOURCE)
-
-include_directories(
-   ${CMAKE_CURRENT_SOURCE_DIR}/src
-   ${CMAKE_CURRENT_SOURCE_DIR}/lib/chck)
-
-add_subdirectory(lib)
 add_subdirectory(src)
+
+if ("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
+   feature_summary(WHAT ALL)
+endif ()
