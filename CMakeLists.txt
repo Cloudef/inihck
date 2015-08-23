@@ -4,6 +4,7 @@ set(INIHCK_NAME "inihck")
 set(INIHCK_DESCRIPTION "Small ini parser")
 set(INIHCK_VERSION "0.0.1")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${inihck_SOURCE_DIR}/CMake)
+INCLUDE(GNUInstallDirs)
 INCLUDE(CTest)
 INCLUDE(test)
 

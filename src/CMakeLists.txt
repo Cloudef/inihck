@@ -14,8 +14,8 @@ endif ()
 set_target_properties(inihck PROPERTIES VERSION ${INIHCK_VERSION} SOVERSION ${SOVERSION})
 target_link_libraries(inihck chck_inihck)
 
-install(TARGETS inihck DESTINATION lib)
-install(DIRECTORY "${inihck_SOURCE_DIR}/include/inihck" DESTINATION include)
+install(TARGETS inihck DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY "${inihck_SOURCE_DIR}/include/inihck" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 if (INIHCK_BUILD_TESTS)
    add_executable(ini_test test.c)
@@ -34,3 +34,4 @@ endif ()
 
 set(INIHCK_LIBRARIES inihck CACHE STRING "Libraries of inihck" FORCE)
 set(INIHCK_INCLUDE_DIRS "${inihck_SOURCE_DIR}/include" CACHE STRING "Include directories of inihck" FORCE)
+mark_as_advanced(INIHCK_LIBRARIES INIHCK_INCLUDE_DIRS)
