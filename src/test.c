@@ -9,6 +9,7 @@
 
 #if FUZZ
 #  undef assert
+#  undef strncmp
 #  define assert(x) (void)x
 #  define strncmp(x, y, z) false
 #endif
