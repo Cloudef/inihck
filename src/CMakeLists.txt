@@ -25,6 +25,10 @@ if (INIHCK_BUILD_TESTS)
    file(COPY test.ini DESTINATION .)
 endif ()
 
+# Add pkgconfig
+configure_file(inihck.pc.in inihck.pc @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/inihck.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+
 set(INIHCK_LIBRARIES inihck CACHE STRING "Libraries of inihck" FORCE)
 set(INIHCK_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/include" CACHE STRING "Include directories of inihck" FORCE)
 mark_as_advanced(INIHCK_LIBRARIES INIHCK_INCLUDE_DIRS)
